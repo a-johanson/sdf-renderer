@@ -6,7 +6,7 @@ git config user.name "a-johanson"
 git config user.email "a-johanson@users.noreply.github.com"
 ```
 
-## GutHub tokens
+## GitHub tokens
 ```
 git remote add origin https://a-johanson:<TOKEN>@github.com/a-johanson/sdf-renderer.git
 git push -u origin master
