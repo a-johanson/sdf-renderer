@@ -1,5 +1,5 @@
 {
-  "name": "sdf",
+  "name": "sdf-renderer",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -7,7 +7,7 @@
     "build": "webpack",
     "dev": "webpack serve"
   },
-  "author": "",
+  "author": "A. Johanson",
   "license": "ISC",
   "devDependencies": {
     "html-webpack-plugin": "^5.5.1",
@@ -16,6 +16,7 @@
     "webpack-dev-server": "^4.13.3"
   },
   "dependencies": {
-    "@svgdotjs/svg.js": "^3.1.2"
+    "@svgdotjs/svg.js": "^3.1.2",
+    "gl-matrix": "^3.4.3"
   }
 }
