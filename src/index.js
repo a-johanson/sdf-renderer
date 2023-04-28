@@ -103,14 +103,15 @@ class RayMarcher {
         const p_u = screenCoordinates[0] * this.aspectRatio * this.halfScreenLengthY;
         const p_v = screenCoordinates[1] * this.halfScreenLengthY;
         let pScreenDirection = vec3.create();
-        vec3.normalize(pScreenDirection,
+        vec3.normalize(
+            pScreenDirection,
             vec3.scaleAndAdd(
                 pScreenDirection,
                 vec3.scaleAndAdd(pScreenDirection, this.w, this.v, p_v),
                 this.u,
                 p_u
             )
-        ); // pScreenDirection = screenCoord.x * u + screenCoord.y * v + w
+        ); // pScreenDirection = normalize(screenCoord.x * u + screenCoord.y * v + w)
         return pScreenDirection;
     }
 
