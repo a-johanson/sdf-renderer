@@ -36,7 +36,7 @@ class ScenePoint {
         this.distFromScene = this._getOrElse(distFromScene, () => sdf(p));
         this.normal = this._getOrElse(normal, () => rayMarcher.sceneNormal(sdf, p));
         this.lightIntensity = this._getOrElse(lightIntensity, () => rayMarcher.lightIntensity(p, this.normal, light));
-        this.isVisible = this._getOrElse(isVisible, () => rayMarcher.isVisible(sdf, p));
+        this.isVisible = this._getOrElse(isVisible, () => rayMarcher.isVisible(sdf, p, this.normal));
     }
 
     _getOrElse(v, f) {
@@ -57,9 +57,9 @@ class RayMarcher {
     halfScreenLengthY;
 
     // Orthonormal basis of the camera system
-    u;
-    v;
-    w;
+    u; // pointing to the right
+    v; // pointing up
+    w; // pointing towards the scene
 
     constructor(camera, lookAt, up, fovYDegrees, aspectRatio) {
         this.camera = camera;
@@ -142,8 +142,31 @@ class RayMarcher {
         return undefined;
     }
 
-    isVisible(sdf, p) {
-        return true;
+    isVisible(sdf, p, n) {
+        if (vec3.dot(this.w, n) > 0.0) { // is the normal pointing away from the camera?
+            return false;
+        }
+
+        // if we walk from p towards camera, do we reach camera or hit the scene before?
+        let dir = vec3.sub(vec3.create(), this.camera, p);
+        const distToCamera = vec3.len(dir);
+        vec3.normalize(dir, dir);
+        const maxIter = 75;
+        const minDist = 0.005;
+        let len = 1.1 * minDist;
+        let q = vec3.create();
+        for (let i = 0; i < maxIter; i++) {
+            if (len >= distToCamera) {
+                return true;
+            }
+            vec3.scaleAndAdd(q, p, dir, len); // q = p + len * dir
+            const distToScene = sdf(q);
+            if (distToScene < minDist) {
+                return false;
+            }
+            len += distToScene;
+        }
+        return false;
     }
 
     lightIntensity(p, n, light) {
@@ -175,9 +198,9 @@ class RayMarcher {
     }
 
     screenCoordinatesToCanvas(canvasDim, screenCoordinates) {
-        return vec2.fromValues(
+        return vec2.fromValues( // invert the sign of the y coordinate because the origin in svg is at the top left
             canvasDim[0] * 0.5 * (screenCoordinates[0] + 1.0),
-            canvasDim[1] * 0.5 * (screenCoordinates[1] + 1.0)
+            canvasDim[1] * 0.5 * (-screenCoordinates[1] + 1.0)
         );
     }
 }
@@ -191,10 +214,17 @@ const lookAt   = vec3.fromValues(0.0, 0.0, 0.0);
 const up       = vec3.fromValues(0.0, 1.0, 0.0);
 let rayMarcher = new RayMarcher(camera, lookAt, up, 30, canvasDim[0] / canvasDim[1]);
 
-let light = vec3.normalize(vec3.create(), vec3.fromValues(1.0, 1.0, 1.0));
+let light = vec3.normalize(vec3.create(), vec3.fromValues(1.0, 2.0, 1.5));
+
+function sdSphere(p, c, r) {
+    return vec3.len(vec3.sub(vec3.create(), p, c)) - r;
+}
 
 function distanceToScene(p) {
-    return vec3.len(p) - 1.0;
+    return Math.min(
+        sdSphere(p, vec3.fromValues(0.0, 0.0, 0.0), 1.0),
+        sdSphere(p, vec3.fromValues(0.0, 0.0, 2.5), 0.25)
+    );
 }
 
 const tileCount = vec2.fromValues(20, 15);
@@ -206,8 +236,8 @@ for (let ix = 0; ix < tileCount[0]; ix++) {
         );
         let pScene = rayMarcher.intersectionWithScene(distanceToScene, screenCoordinates, light);
         if (pScene !== undefined) {
-            const walkingSteps = 15;
-            const walkingDist = 0.04;
+            const walkingSteps = 175;
+            const walkingDist = 0.005;
             let pPrev = pScene;
             let prevCanvasCoordinates = rayMarcher.screenCoordinatesToCanvas(canvasDim, screenCoordinates);
             for (let i = 0; i < walkingSteps; i++) {
