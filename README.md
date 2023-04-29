@@ -22,7 +22,7 @@ nvm use node
 ```
 npm init
 npm install -D webpack webpack-cli webpack-dev-server html-webpack-plugin
-npm install @svgdotjs/svg.js gl-matrix
+npm install @svgdotjs/svg.js gl-matrix seedrandom
 npm run build
 npm run dev
 ```

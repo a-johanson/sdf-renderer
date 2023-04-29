@@ -1,6 +1,8 @@
 import { SVG } from '@svgdotjs/svg.js';
 import { glMatrix, vec2, vec3 } from 'gl-matrix/esm/index.js';
+import * as seedrandom from 'seedrandom/index.js';
 
+let rng = seedrandom('so many colorful shapes -- it is beautiful!');
 glMatrix.setMatrixArrayType(Array);
 
 class ScenePoint {
@@ -35,8 +37,8 @@ class ScenePoint {
         this.distFromCamera = this._getOrElse(distFromCamera, () => rayMarcher.distFromCamera(p));
         this.distFromScene = this._getOrElse(distFromScene, () => sdf(p));
         this.normal = this._getOrElse(normal, () => rayMarcher.sceneNormal(sdf, p));
-        this.lightIntensity = this._getOrElse(lightIntensity, () => rayMarcher.lightIntensity(p, this.normal, light));
-        this.isVisible = this._getOrElse(isVisible, () => rayMarcher.isVisible(sdf, p, this.normal));
+        this.lightIntensity = this._getOrElse(lightIntensity, () => rayMarcher.lightIntensity(sdf, p, this.normal, light));
+        this.isVisible = this._getOrElse(isVisible, () => rayMarcher.isVisible(sdf, rayMarcher.camera, p, this.normal));
     }
 
     _getOrElse(v, f) {
@@ -142,21 +144,21 @@ class RayMarcher {
         return undefined;
     }
 
-    isVisible(sdf, p, n) {
-        if (vec3.dot(this.w, n) > 0.0) { // is the normal pointing away from the camera?
+    isVisible(sdf, eye, p, n = undefined) {
+        let dir = vec3.sub(vec3.create(), eye, p);
+        if (n !== undefined && vec3.dot(dir, n) < 0.0) { // is the normal pointing away from the eye point?
             return false;
         }
 
-        // if we walk from p towards camera, do we reach camera or hit the scene before?
-        let dir = vec3.sub(vec3.create(), this.camera, p);
-        const distToCamera = vec3.len(dir);
+        // if we walk from p towards eye, do we reach eye or hit the scene before?
+        const distToEye = vec3.len(dir);
         vec3.normalize(dir, dir);
         const maxIter = 75;
         const minDist = 0.005;
-        let len = 1.1 * minDist;
+        let len = 10.0 * minDist;
         let q = vec3.create();
         for (let i = 0; i < maxIter; i++) {
-            if (len >= distToCamera) {
+            if (len >= distToEye) {
                 return true;
             }
             vec3.scaleAndAdd(q, p, dir, len); // q = p + len * dir
@@ -169,8 +171,15 @@ class RayMarcher {
         return false;
     }
 
-    lightIntensity(p, n, light) {
-        return Math.max(vec3.dot(light, n), 0.0); // = max(dot(light, n), 0.0)
+    lightIntensity(sdf, p, n, light) {
+        const globalIntensity = 0.1;
+        let intensity = globalIntensity
+        if (this.isVisible(sdf, light, p)) {
+            let temp = vec3.create();
+            const directIntensity = Math.max(vec3.dot(vec3.normalize(temp, vec3.sub(temp, light, p)), n), 0.0) // = max(dot(normalize(light - p), n), 0.0)
+            intensity += (1.0 - intensity) * directIntensity;
+        }
+        return intensity;
     }
 
     positionRelativeToCamera(p) {
@@ -209,25 +218,36 @@ class RayMarcher {
 const canvasDim = vec2.fromValues(800, 600);
 let draw = SVG().addTo('body').size(canvasDim[0], canvasDim[1]);
 
-const camera   = vec3.fromValues(0.0, 0.0, 5.0);
+const camera   = vec3.fromValues(0.0, 2.0, 5.0);
 const lookAt   = vec3.fromValues(0.0, 0.0, 0.0);
 const up       = vec3.fromValues(0.0, 1.0, 0.0);
-let rayMarcher = new RayMarcher(camera, lookAt, up, 30, canvasDim[0] / canvasDim[1]);
+let rayMarcher = new RayMarcher(camera, lookAt, up, 50, canvasDim[0] / canvasDim[1]);
 
-let light = vec3.normalize(vec3.create(), vec3.fromValues(1.0, 2.0, 1.5));
+let light = vec3.fromValues(0.0, -1.0, 0.0);
 
 function sdSphere(p, c, r) {
     return vec3.len(vec3.sub(vec3.create(), p, c)) - r;
 }
 
+function sdTorus(p, c, r) {
+    let q = vec2.fromValues(p[1], vec2.len(vec2.fromValues(p[0], p[2]))); // q = vec2(p.y, length(p.xz))
+    return vec2.len(vec2.sub(q, q, c)) - r; // = length(q - c) - r
+}
+
+function sdPlane(p, y) {
+    return Math.abs(p[1] - y);
+}
+
 function distanceToScene(p) {
     return Math.min(
-        sdSphere(p, vec3.fromValues(0.0, 0.0, 0.0), 1.0),
-        sdSphere(p, vec3.fromValues(0.0, 0.0, 2.5), 0.25)
+        sdTorus(p, vec2.fromValues(0.0, 1.0), 0.5),
+        sdSphere(p, vec3.fromValues(1.0, -1.5, 0.0), 0.5),
+        sdSphere(p, vec3.fromValues(-1.0, 1.5, 0.0), 0.25),
+        sdPlane(p, -2.0)
     );
 }
 
-const tileCount = vec2.fromValues(20, 15);
+const tileCount = vec2.fromValues(240, 180);
 for (let ix = 0; ix < tileCount[0]; ix++) {
     for (let iy = 0; iy < tileCount[1]; iy++) {
         const screenCoordinates = vec2.fromValues(
@@ -235,14 +255,18 @@ for (let ix = 0; ix < tileCount[0]; ix++) {
             2.0 * iy / tileCount[1] - 1.0,
         );
         let pScene = rayMarcher.intersectionWithScene(distanceToScene, screenCoordinates, light);
-        if (pScene !== undefined) {
-            const walkingSteps = 175;
-            const walkingDist = 0.005;
+        if (pScene !== undefined && pScene.lightIntensity < Math.pow(rng(), 4.0)) {
+            const walkingSteps = 25 + pScene.lightIntensity * 35;
+            const walkingDist = 0.01;
             let pPrev = pScene;
             let prevCanvasCoordinates = rayMarcher.screenCoordinatesToCanvas(canvasDim, screenCoordinates);
             for (let i = 0; i < walkingSteps; i++) {
+                let toLight = vec3.sub(vec3.create(), light, pPrev.p);
+                const normalComponent = vec3.dot(pPrev.normal, toLight);
+                vec3.scaleAndAdd(toLight, toLight, pPrev.normal, -normalComponent);
+
                 let surfaceDir = vec3.create();
-                vec3.normalize(surfaceDir, vec3.cross(surfaceDir, pPrev.normal, light));
+                vec3.normalize(surfaceDir, vec3.cross(surfaceDir, pPrev.normal, toLight));
                 const pWalk = new ScenePoint({
                     rayMarcher: rayMarcher,
                     sdf: distanceToScene,
