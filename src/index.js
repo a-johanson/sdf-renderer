@@ -2,7 +2,7 @@ import { SVG } from '@svgdotjs/svg.js';
 import { glMatrix, vec2, vec3 } from 'gl-matrix/esm/index.js';
 import * as seedrandom from 'seedrandom/index.js';
 
-let rng = seedrandom('so many colorful shapes -- it is beautiful!');
+let rng = seedrandom('so many colorful shapes -- it is rrreally beautiful!');
 glMatrix.setMatrixArrayType(Array);
 
 class ScenePoint {
@@ -215,16 +215,6 @@ class RayMarcher {
 }
 
 
-const canvasDim = vec2.fromValues(800, 600);
-let draw = SVG().addTo('body').size(canvasDim[0], canvasDim[1]);
-
-const camera   = vec3.fromValues(0.0, 2.0, 5.0);
-const lookAt   = vec3.fromValues(0.0, 0.0, 0.0);
-const up       = vec3.fromValues(0.0, 1.0, 0.0);
-let rayMarcher = new RayMarcher(camera, lookAt, up, 50, canvasDim[0] / canvasDim[1]);
-
-let light = vec3.fromValues(0.0, -1.0, 0.0);
-
 function sdSphere(p, c, r) {
     return vec3.len(vec3.sub(vec3.create(), p, c)) - r;
 }
@@ -247,6 +237,53 @@ function distanceToScene(p) {
     );
 }
 
+function drawPolyLine(svg, points) {
+    if (points.length > 1) {
+        const roundedPoints = points.map(ps => ps.map(v => v.toFixed(2)));
+        svg.polyline(roundedPoints).fill('none').stroke({ width: 1, color: '#f06', linecap: 'round', linejoin: 'round' });
+    }
+}
+
+function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount, stepScale) {
+    const canvasStart = rayMarcher.screenCoordinatesToCanvas(canvasDim, pScene.screenCoordinates)
+    let polyLinePoints = [[canvasStart[0], canvasStart[1]]];
+    let pPrev = pScene;
+    for (let i = 0; i < stepCount; i++) {
+        let toLight = vec3.sub(vec3.create(), light, pPrev.p);
+        const normalComponent = vec3.dot(pPrev.normal, toLight);
+        vec3.scaleAndAdd(toLight, toLight, pPrev.normal, -normalComponent);
+
+        let surfaceDir = vec3.create();
+        vec3.normalize(surfaceDir, vec3.cross(surfaceDir, pPrev.normal, toLight));
+        const pWalk = new ScenePoint({
+            rayMarcher: rayMarcher,
+            sdf: sdf,
+            light: light,
+            p: vec3.scaleAndAdd(vec3.create(), pPrev.p, surfaceDir, stepScale)
+        });
+        if (pWalk.isVisible) {
+            const canvasWalk = rayMarcher.screenCoordinatesToCanvas(canvasDim, pWalk.screenCoordinates);
+            polyLinePoints.push([canvasWalk[0], canvasWalk[1]]);
+        }
+        else {
+            drawPolyLine(svg, polyLinePoints);
+            polyLinePoints = [];
+        }
+        pPrev = pWalk;
+    }
+    drawPolyLine(svg, polyLinePoints);
+}
+
+const canvasDim = vec2.fromValues(800, 600);
+let draw = SVG().addTo('body').size(canvasDim[0], canvasDim[1]);
+
+const camera   = vec3.fromValues(0.0, 2.0, 5.0);
+const lookAt   = vec3.fromValues(0.0, 0.0, 0.0);
+const up       = vec3.fromValues(0.0, 1.0, 0.0);
+let rayMarcher = new RayMarcher(camera, lookAt, up, 50, canvasDim[0] / canvasDim[1]);
+
+let light = vec3.fromValues(0.0, -1.0, 0.0);
+
 const tileCount = vec2.fromValues(240, 180);
 for (let ix = 0; ix < tileCount[0]; ix++) {
     for (let iy = 0; iy < tileCount[1]; iy++) {
@@ -256,31 +293,10 @@ for (let ix = 0; ix < tileCount[0]; ix++) {
         );
         let pScene = rayMarcher.intersectionWithScene(distanceToScene, screenCoordinates, light);
         if (pScene !== undefined && pScene.lightIntensity < Math.pow(rng(), 4.0)) {
-            const walkingSteps = 25 + pScene.lightIntensity * 35;
+            const walkingSteps = 13 + pScene.lightIntensity * 17;
             const walkingDist = 0.01;
-            let pPrev = pScene;
-            let prevCanvasCoordinates = rayMarcher.screenCoordinatesToCanvas(canvasDim, screenCoordinates);
-            for (let i = 0; i < walkingSteps; i++) {
-                let toLight = vec3.sub(vec3.create(), light, pPrev.p);
-                const normalComponent = vec3.dot(pPrev.normal, toLight);
-                vec3.scaleAndAdd(toLight, toLight, pPrev.normal, -normalComponent);
-
-                let surfaceDir = vec3.create();
-                vec3.normalize(surfaceDir, vec3.cross(surfaceDir, pPrev.normal, toLight));
-                const pWalk = new ScenePoint({
-                    rayMarcher: rayMarcher,
-                    sdf: distanceToScene,
-                    light: light,
-                    p: vec3.scaleAndAdd(vec3.create(), pPrev.p, surfaceDir, walkingDist)
-                });
-                const walkCanvasCoordinates = rayMarcher.screenCoordinatesToCanvas(canvasDim, pWalk.screenCoordinates);
-                if (pWalk.isVisible) {
-                    draw.line(prevCanvasCoordinates[0], prevCanvasCoordinates[1], walkCanvasCoordinates[0], walkCanvasCoordinates[1]).stroke('#f06');
-                    // draw.circle(2).move(prevCanvasCoordinates[0], prevCanvasCoordinates[1]).fill('#f06');
-                }
-                pPrev = pWalk;
-                prevCanvasCoordinates = walkCanvasCoordinates;
-            }
+            drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, walkingDist);
+            drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, -walkingDist);
         }
     }
 }
