@@ -1,5 +1,9 @@
 # Rendering SDFs to SVG
 
+Draw hatch lines on the surface defined by a signed distance function.
+
+![render](render.png)
+
 ## GitHub noreply email
 ```
 git config user.name "a-johanson"

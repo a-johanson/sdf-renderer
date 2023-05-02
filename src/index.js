@@ -244,7 +244,7 @@ function drawPolyLine(svg, points) {
     }
 }
 
-function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount, stepScale) {
+function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount, stepScale, rng) {
     const canvasStart = rayMarcher.screenCoordinatesToCanvas(canvasDim, pScene.screenCoordinates)
     let polyLinePoints = [[canvasStart[0], canvasStart[1]]];
     let pPrev = pScene;
@@ -261,6 +261,9 @@ function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount
             light: light,
             p: vec3.scaleAndAdd(vec3.create(), pPrev.p, surfaceDir, stepScale)
         });
+        if (Math.pow(pWalk.lightIntensity, 3.0) * i / stepCount > rng()) {
+            break;
+        }
         if (pWalk.isVisible) {
             const canvasWalk = rayMarcher.screenCoordinatesToCanvas(canvasDim, pWalk.screenCoordinates);
             polyLinePoints.push([canvasWalk[0], canvasWalk[1]]);
@@ -274,6 +277,20 @@ function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount
     drawPolyLine(svg, polyLinePoints);
 }
 
+function onJitteredGrid(canvasDim, cellSize, rng, f) {
+    const xCount = canvasDim[0] / cellSize;
+    const yCount = canvasDim[1] / cellSize;
+
+    for (let ix = 0; ix < xCount; ix++) {
+        for (let iy = 0; iy < yCount; iy++) {
+            const xJittered = (ix + rng()) * cellSize;
+            const yJittered = (iy + rng()) * cellSize;
+            f(xJittered, yJittered);
+        }
+    }
+
+}
+
 const canvasDim = vec2.fromValues(800, 600);
 let draw = SVG().addTo('body').size(canvasDim[0], canvasDim[1]);
 
@@ -282,21 +299,18 @@ const lookAt   = vec3.fromValues(0.0, 0.0, 0.0);
 const up       = vec3.fromValues(0.0, 1.0, 0.0);
 let rayMarcher = new RayMarcher(camera, lookAt, up, 50, canvasDim[0] / canvasDim[1]);
 
-let light = vec3.fromValues(0.0, -1.0, 0.0);
+let light = vec3.fromValues(3.5, 20.0, 5.0);
 
-const tileCount = vec2.fromValues(240, 180);
-for (let ix = 0; ix < tileCount[0]; ix++) {
-    for (let iy = 0; iy < tileCount[1]; iy++) {
-        const screenCoordinates = vec2.fromValues(
-            2.0 * ix / tileCount[0] - 1.0,
-            2.0 * iy / tileCount[1] - 1.0,
-        );
-        let pScene = rayMarcher.intersectionWithScene(distanceToScene, screenCoordinates, light);
-        if (pScene !== undefined && pScene.lightIntensity < Math.pow(rng(), 4.0)) {
-            const walkingSteps = 13 + pScene.lightIntensity * 17;
-            const walkingDist = 0.01;
-            drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, walkingDist);
-            drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, -walkingDist);
-        }
+onJitteredGrid(canvasDim, 4.0, rng, (x, y) => {
+    const screenCoordinates = vec2.fromValues(
+        2.0 * x / canvasDim[0] - 1.0,
+        2.0 * y / canvasDim[1] - 1.0
+    );
+    let pScene = rayMarcher.intersectionWithScene(distanceToScene, screenCoordinates, light);
+    if (pScene !== undefined && pScene.lightIntensity < rng()) {
+        const walkingSteps = 5 + pScene.lightIntensity * 80;
+        const walkingDist = 0.01;
+        drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, walkingDist, rng);
+        drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, -walkingDist, rng);
     }
-}
+});
