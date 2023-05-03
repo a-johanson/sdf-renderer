@@ -14,7 +14,7 @@ class ScenePoint {
     screenCoordinates;
     normal;
     lightIntensity;
-    isVisible;
+    visibilityFactor;
 
     constructor({
         rayMarcher = undefined,
@@ -28,7 +28,7 @@ class ScenePoint {
         screenCoordinates = undefined,
         normal = undefined,
         lightIntensity = undefined,
-        isVisible = undefined
+        visibilityFactor = undefined
     }) {
         this.p = p;
         this.p_uvw = this._getOrElse(p_uvw, () => rayMarcher.cameraSystemCoordinates(p));
@@ -38,7 +38,7 @@ class ScenePoint {
         this.distFromScene = this._getOrElse(distFromScene, () => sdf(p));
         this.normal = this._getOrElse(normal, () => rayMarcher.sceneNormal(sdf, p));
         this.lightIntensity = this._getOrElse(lightIntensity, () => rayMarcher.lightIntensity(sdf, p, this.normal, light));
-        this.isVisible = this._getOrElse(isVisible, () => rayMarcher.isVisible(sdf, rayMarcher.camera, p, this.normal));
+        this.visibilityFactor = this._getOrElse(visibilityFactor, () => rayMarcher.visibilityFactor(sdf, rayMarcher.camera, p, this.normal));
     }
 
     _getOrElse(v, f) {
@@ -136,7 +136,7 @@ class RayMarcher {
                     distFromCamera: len,
                     distFromScene: dist,
                     screenCoordinates: screenCoordinates,
-                    isVisible: true
+                    visibilityFactor: 1.0
                 });
             }
             len += dist;
@@ -144,10 +144,10 @@ class RayMarcher {
         return undefined;
     }
 
-    isVisible(sdf, eye, p, n = undefined) {
+    visibilityFactor(sdf, eye, p, n = undefined) {
         let dir = vec3.sub(vec3.create(), eye, p);
         if (n !== undefined && vec3.dot(dir, n) < 0.0) { // is the normal pointing away from the eye point?
-            return false;
+            return 0.0;
         }
 
         // if we walk from p towards eye, do we reach eye or hit the scene before?
@@ -155,29 +155,33 @@ class RayMarcher {
         vec3.normalize(dir, dir);
         const maxIter = 75;
         const minDist = 0.005;
+        const penumbra = 48.0;
         let len = 10.0 * minDist;
         let q = vec3.create();
+        let closestMissRatio = 1.0;
         for (let i = 0; i < maxIter; i++) {
             if (len >= distToEye) {
-                return true;
+                return closestMissRatio;
             }
             vec3.scaleAndAdd(q, p, dir, len); // q = p + len * dir
             const distToScene = sdf(q);
             if (distToScene < minDist) {
-                return false;
+                return 0.0;
             }
+            closestMissRatio = Math.min(closestMissRatio, penumbra * distToScene / len);
             len += distToScene;
         }
-        return false;
+        return 0.0;
     }
 
     lightIntensity(sdf, p, n, light) {
         const globalIntensity = 0.1;
-        let intensity = globalIntensity
-        if (this.isVisible(sdf, light, p)) {
+        let intensity = globalIntensity;
+        const visibilityFactor = this.visibilityFactor(sdf, light, p);
+        if (visibilityFactor > 0.0) {
             let temp = vec3.create();
             const directIntensity = Math.max(vec3.dot(vec3.normalize(temp, vec3.sub(temp, light, p)), n), 0.0) // = max(dot(normalize(light - p), n), 0.0)
-            intensity += (1.0 - intensity) * directIntensity;
+            intensity += (1.0 - intensity) * visibilityFactor * directIntensity;
         }
         return intensity;
     }
@@ -264,7 +268,7 @@ function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount
         if (Math.pow(pWalk.lightIntensity, 3.0) * i / stepCount > rng()) {
             break;
         }
-        if (pWalk.isVisible) {
+        if (pWalk.visibilityFactor > 0.0) {
             const canvasWalk = rayMarcher.screenCoordinatesToCanvas(canvasDim, pWalk.screenCoordinates);
             polyLinePoints.push([canvasWalk[0], canvasWalk[1]]);
         }
