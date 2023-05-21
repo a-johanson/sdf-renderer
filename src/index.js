@@ -232,13 +232,65 @@ function sdPlane(p, y) {
     return Math.abs(p[1] - y);
 }
 
-function distanceToScene(p) {
-    return Math.min(
-        sdTorus(p, vec2.fromValues(0.0, 1.0), 0.5),
-        sdSphere(p, vec3.fromValues(1.0, -1.5, 0.0), 0.5),
-        sdSphere(p, vec3.fromValues(-1.0, 1.5, 0.0), 0.25),
-        sdPlane(p, -2.0)
+function opElongateZ(p, h) {
+    const qz = Math.max(Math.abs(p[2]) - h, 0.0);
+    return vec3.fromValues(p[0], p[1], qz);
+}
+
+function opRepeatFinite(p, s, lim_a, lim_b) {
+    let t = vec3.create();
+    vec3.div(t, p, s);
+    vec3.round(t, t);
+    vec3.max(t, t, lim_a);
+    vec3.min(t, t, lim_b);
+    vec3.mul(t, t, s);
+    vec3.sub(t, p, t);
+    return t; // = p - s * clamp(round(p/s), lim_a, lim_b)
+}
+
+function opShift(p, d) {
+    return vec3.sub(vec3.create(), p, d);
+}
+
+function sdCylinderV(p, r, h) {
+    const len_xz      = Math.sqrt(p[0]*p[0] + p[2]*p[2]);
+    const d_xz        = len_xz  - r;
+    const d_y         = Math.abs(p[1]) - h;
+    const d_xz_clamp  = Math.max(d_xz, 0.0);
+    const d_y_clamp   = Math.max(d_y, 0.0);
+    const len_d_clamp = Math.sqrt(d_xz_clamp*d_xz_clamp + d_y_clamp * d_y_clamp);
+    return Math.min(Math.max(d_xz, d_y), 0.0) + len_d_clamp;
+}
+
+function sdCylinderVRound(p, r, h, d) {
+    return sdCylinderV(p, r - d, h - d) - d;
+}
+
+function sdStackedPillar(p) {
+    const stretch = 1.13;
+    const height = 0.55;
+    const radius = 1.0;
+    const p_elongated = opElongateZ(p, stretch);
+    const p_repeated = opRepeatFinite(
+        p,
+        vec3.fromValues(1.0, 2.0 * (height + 0.025), 1.0),
+        vec3.fromValues(0.0, -4.0, 0.0),
+        vec3.fromValues(0.0, -1.0, 0.0)
     );
+    const sd_roundedTop = sdCylinderVRound(p_elongated, radius, height, 0.15);
+    const sd_sharpBottom = sdCylinderV(opShift(p_elongated, vec3.fromValues(0.0, -0.5 * height, 0.0)), radius, 0.5 * height);
+    const sd_stack = sdCylinderV(opElongateZ(p_repeated, stretch), radius, height);
+    return Math.min(sd_roundedTop, sd_sharpBottom, sd_stack);
+}
+
+function distanceToScene(p) {
+    const p_repeated = opRepeatFinite(
+        p,
+        vec3.fromValues(3.0, 1.0, 1.0),
+        vec3.fromValues(-2.0, 0.0, 0.0),
+        vec3.fromValues(2.0, 0.0, 0.0)
+    );
+    return sdStackedPillar(p_repeated);
 }
 
 function drawPolyLine(svg, points) {
@@ -295,15 +347,15 @@ function onJitteredGrid(canvasDim, cellSize, rng, f) {
 
 }
 
-const canvasDim = vec2.fromValues(800, 600);
+const canvasDim = vec2.fromValues(800, 1047);
 let draw = SVG().addTo('body').size(canvasDim[0], canvasDim[1]);
 
-const camera   = vec3.fromValues(0.0, 2.0, 5.0);
-const lookAt   = vec3.fromValues(0.0, 0.0, 0.0);
+const camera   = vec3.scale(vec3.create(), vec3.fromValues(3.1, -2.0, 5.0), 3.0);
+const lookAt   = vec3.fromValues(0.0, 2.0, 0.0);
 const up       = vec3.fromValues(0.0, 1.0, 0.0);
-let rayMarcher = new RayMarcher(camera, lookAt, up, 50, canvasDim[0] / canvasDim[1]);
+let rayMarcher = new RayMarcher(camera, lookAt, up, 38.0, canvasDim[0] / canvasDim[1]);
 
-let light = vec3.fromValues(3.5, 20.0, 5.0);
+let light = vec3.fromValues(5.0, 2.0, 5.0);
 
 onJitteredGrid(canvasDim, 4.0, rng, (x, y) => {
     const screenCoordinates = vec2.fromValues(
