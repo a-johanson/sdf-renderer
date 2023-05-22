@@ -274,7 +274,7 @@ function sdStackedPillar(p) {
     const p_repeated = opRepeatFinite(
         p,
         vec3.fromValues(1.0, 2.0 * (height + 0.025), 1.0),
-        vec3.fromValues(0.0, -4.0, 0.0),
+        vec3.fromValues(0.0, -5.0, 0.0),
         vec3.fromValues(0.0, -1.0, 0.0)
     );
     const sd_roundedTop = sdCylinderVRound(p_elongated, radius, height, 0.15);
@@ -286,9 +286,9 @@ function sdStackedPillar(p) {
 function distanceToScene(p) {
     const p_repeated = opRepeatFinite(
         p,
-        vec3.fromValues(3.0, 1.0, 1.0),
+        vec3.fromValues(3.9, 1.0, 1.0),
         vec3.fromValues(-2.0, 0.0, 0.0),
-        vec3.fromValues(2.0, 0.0, 0.0)
+        vec3.fromValues(1.0, 0.0, 0.0)
     );
     return sdStackedPillar(p_repeated);
 }
@@ -350,12 +350,12 @@ function onJitteredGrid(canvasDim, cellSize, rng, f) {
 const canvasDim = vec2.fromValues(800, 1047);
 let draw = SVG().addTo('body').size(canvasDim[0], canvasDim[1]);
 
-const camera   = vec3.scale(vec3.create(), vec3.fromValues(3.1, -2.0, 5.0), 3.0);
-const lookAt   = vec3.fromValues(0.0, 2.0, 0.0);
+const camera   = vec3.scale(vec3.create(), vec3.fromValues(3.75, -3.0, 3.5), 3.0);
+const lookAt   = vec3.fromValues(0.0, 2.0, 1.13);
 const up       = vec3.fromValues(0.0, 1.0, 0.0);
 let rayMarcher = new RayMarcher(camera, lookAt, up, 38.0, canvasDim[0] / canvasDim[1]);
 
-let light = vec3.fromValues(5.0, 2.0, 5.0);
+let light = vec3.fromValues(5.0e5, 3.3e5, -5.0);
 
 onJitteredGrid(canvasDim, 4.0, rng, (x, y) => {
     const screenCoordinates = vec2.fromValues(
