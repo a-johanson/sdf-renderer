@@ -232,6 +232,15 @@ function sdPlane(p, y) {
     return Math.abs(p[1] - y);
 }
 
+function sdBox(p, s) {
+    let q = vec3.fromValues(
+        Math.abs(p[0]) - s[0],
+        Math.abs(p[1]) - s[1],
+        Math.abs(p[2]) - s[2]
+    ); // q = abs(p) - s
+    return vec3.len(vec3.max(vec3.create(), q, vec3.fromValues(0.0, 0.0, 0.0))) + Math.min(Math.max(q[0], q[1], q[2]), 0.0); // = length(max(q, 0)) + min(max(q.x, q.y, q.z), 0);
+}
+
 function opElongateZ(p, h) {
     const qz = Math.max(Math.abs(p[2]) - h, 0.0);
     return vec3.fromValues(p[0], p[1], qz);
@@ -283,6 +292,20 @@ function sdStackedPillar(p) {
     return Math.min(sd_roundedTop, sd_sharpBottom, sd_stack);
 }
 
+function sdCromwellTower(p) {
+    const pillarHalfSide = 0.5 * 0.9;
+    const pillarHalfHeight = 0.5 * 0.55 * 4 * 20.5;
+    const pillarSpacing = 2.77;
+    const p_repeated_pillars = opRepeatFinite(
+        opShift(p, vec3.fromValues(0.0, pillarHalfHeight, 0.0)),
+        vec3.fromValues(1.0, 1.0, pillarSpacing),
+        vec3.fromValues(0.0, 0.0, -2.0),
+        vec3.fromValues(0.0, 0.0, 2.0)
+    );
+    const pillars = sdBox(p_repeated_pillars, vec3.fromValues(pillarHalfSide, pillarHalfHeight, pillarHalfSide));
+    return pillars;
+}
+
 function distanceToScene(p) {
     const p_repeated = opRepeatFinite(
         p,
@@ -290,7 +313,10 @@ function distanceToScene(p) {
         vec3.fromValues(-2.0, 0.0, 0.0),
         vec3.fromValues(1.0, 0.0, 0.0)
     );
-    return sdStackedPillar(p_repeated);
+    const sd_pillars = sdStackedPillar(p_repeated);
+    const p_shifted = opShift(p, vec3.fromValues(-16.0, 0.0, -16.5));
+    const sd_tower = sdCromwellTower(p_shifted);
+    return Math.min(sd_pillars, sd_tower);
 }
 
 function drawPolyLine(svg, points) {
@@ -350,10 +376,12 @@ function onJitteredGrid(canvasDim, cellSize, rng, f) {
 const canvasDim = vec2.fromValues(800, 1047);
 let draw = SVG().addTo('body').size(canvasDim[0], canvasDim[1]);
 
-const camera   = vec3.scale(vec3.create(), vec3.fromValues(3.75, -3.0, 3.5), 3.0);
+const angleCamera = (90.0 - 43.0) / 180.0 * Math.PI;
+const cameraDir   = vec3.fromValues(-Math.sin(angleCamera), 0.0, -Math.cos(angleCamera));
+const camera      = vec3.scaleAndAdd(vec3.create(), vec3.fromValues(0.0, -3.5, 0.0), cameraDir,  -7.5);
 const lookAt   = vec3.fromValues(0.0, 2.0, 1.13);
 const up       = vec3.fromValues(0.0, 1.0, 0.0);
-let rayMarcher = new RayMarcher(camera, lookAt, up, 38.0, canvasDim[0] / canvasDim[1]);
+let rayMarcher = new RayMarcher(camera, lookAt, up, 1.5 * 38.0, canvasDim[0] / canvasDim[1]);
 
 let light = vec3.fromValues(5.0e5, 3.3e5, -5.0);
 
