@@ -296,14 +296,32 @@ function sdCromwellTower(p) {
     const pillarHalfSide = 0.5 * 0.9;
     const pillarHalfHeight = 0.5 * 0.55 * 4 * 20.5;
     const pillarSpacing = 2.77;
-    const p_repeated_pillars = opRepeatFinite(
+    const p_repeatedPillars = opRepeatFinite(
         opShift(p, vec3.fromValues(0.0, pillarHalfHeight, 0.0)),
         vec3.fromValues(1.0, 1.0, pillarSpacing),
         vec3.fromValues(0.0, 0.0, -2.0),
         vec3.fromValues(0.0, 0.0, 2.0)
     );
-    const pillars = sdBox(p_repeated_pillars, vec3.fromValues(pillarHalfSide, pillarHalfHeight, pillarHalfSide));
-    return pillars;
+    const pillars = sdBox(p_repeatedPillars, vec3.fromValues(pillarHalfSide, pillarHalfHeight, pillarHalfSide));
+
+    const storyHeight = 0.895;
+    const windowBarHeight = 0.23;
+    const windows = sdBox(
+        opShift(p, vec3.fromValues(-1.0 * pillarHalfSide, pillarHalfHeight, 0.0)),
+        vec3.fromValues(pillarHalfSide, pillarHalfHeight, 0.5 * 4.0 * pillarSpacing)
+    );
+    const p_repeatedWindowBars = opRepeatFinite(
+        opShift(p, vec3.fromValues(-0.25 * pillarHalfSide, pillarHalfHeight, 0.0)),
+        vec3.fromValues(1.0, storyHeight, 1.0),
+        vec3.fromValues(0.0, -21.0, 0.0),
+        vec3.fromValues(0.0, 21.0, 0.0)
+    );
+    const windowBars = sdBox(
+        p_repeatedWindowBars,
+        vec3.fromValues(pillarHalfSide, 0.5 * windowBarHeight, 0.5 * 4.0 * pillarSpacing)
+    );
+
+    return Math.min(pillars, windows, windowBars);
 }
 
 function distanceToScene(p) {
@@ -379,9 +397,11 @@ let draw = SVG().addTo('body').size(canvasDim[0], canvasDim[1]);
 const angleCamera = (90.0 - 43.0) / 180.0 * Math.PI;
 const cameraDir   = vec3.fromValues(-Math.sin(angleCamera), 0.0, -Math.cos(angleCamera));
 const camera      = vec3.scaleAndAdd(vec3.create(), vec3.fromValues(0.0, -3.5, 0.0), cameraDir,  -7.5);
-const lookAt   = vec3.fromValues(0.0, 2.0, 1.13);
-const up       = vec3.fromValues(0.0, 1.0, 0.0);
-let rayMarcher = new RayMarcher(camera, lookAt, up, 1.5 * 38.0, canvasDim[0] / canvasDim[1]);
+const lookAt      = vec3.fromValues(0.0, 2.0, 1.13);
+// const camera      = vec3.fromValues(-10.0, 20.0, -10.5);
+// const lookAt      = vec3.fromValues(-16.0, 20.0, -16.5);
+const up          = vec3.fromValues(0.0, 1.0, 0.0);
+let rayMarcher    = new RayMarcher(camera, lookAt, up, 1.5 * 38.0, canvasDim[0] / canvasDim[1]);
 
 let light = vec3.fromValues(5.0e5, 3.3e5, -5.0);
 
@@ -392,7 +412,8 @@ onJitteredGrid(canvasDim, 4.0, rng, (x, y) => {
     );
     let pScene = rayMarcher.intersectionWithScene(distanceToScene, screenCoordinates, light);
     if (pScene !== undefined && pScene.lightIntensity < rng()) {
-        const walkingSteps = 5 + pScene.lightIntensity * 80;
+        const distanceScalingFactor = Math.min(Math.max(Math.pow(pScene.distFromCamera, 2.0) / 64.0, 0.8), 3.0);
+        const walkingSteps = (5 + pScene.lightIntensity * 80) * distanceScalingFactor;
         const walkingDist = 0.01;
         drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, walkingDist, rng);
         drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, -walkingDist, rng);
