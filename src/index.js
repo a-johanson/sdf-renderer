@@ -261,6 +261,26 @@ function opShift(p, d) {
     return vec3.sub(vec3.create(), p, d);
 }
 
+function opRotateY(p, phi) {
+    const cosPhi = Math.cos(-phi);
+    const sinPhi = Math.sin(-phi);
+    return vec3.fromValues(
+        cosPhi * p[0] + sinPhi * p[2],
+        p[1],
+        -sinPhi * p[0] + cosPhi * p[2]
+    );
+}
+
+function opRotateZ(p, phi) {
+    const cosPhi = Math.cos(-phi);
+    const sinPhi = Math.sin(-phi);
+    return vec3.fromValues(
+        cosPhi * p[0] + sinPhi * p[1],
+        -sinPhi * p[0] + cosPhi * p[1],
+        p[2]
+    );
+}
+
 function sdCylinderV(p, r, h) {
     const len_xz      = Math.sqrt(p[0]*p[0] + p[2]*p[2]);
     const d_xz        = len_xz  - r;
@@ -292,6 +312,20 @@ function sdStackedPillar(p) {
     return Math.min(sd_roundedTop, sd_sharpBottom, sd_stack);
 }
 
+function sdCromwellBalcony(p, windowLedgeHeight, balconyHalfLength) {
+    const balconyHalfHeight = 0.5 * (windowLedgeHeight + 0.18);
+    return Math.max(
+        Math.min(
+            sdBox(p, vec3.fromValues(1.0, 0.5 * windowLedgeHeight, balconyHalfLength)),
+            sdBox(
+                opRotateZ(opShift(p, vec3.fromValues(1.05, windowLedgeHeight - 0.1, 0.0)), 28.0 * Math.PI / 180.0),
+                vec3.fromValues(0.5 * 0.6 * windowLedgeHeight, 0.5 * 2.1 * windowLedgeHeight, balconyHalfLength)
+            )
+        ),
+        sdBox(opShift(p, vec3.fromValues(0.0, balconyHalfHeight - 0.5 * windowLedgeHeight, 0.0)), vec3.fromValues(1.25, balconyHalfHeight, balconyHalfLength)),
+    );
+}
+
 function sdCromwellTower(p) {
     const pillarHalfSide = 0.5 * 0.9;
     const pillarHalfHeight = 0.5 * 0.55 * 4 * 20.5;
@@ -305,23 +339,72 @@ function sdCromwellTower(p) {
     const pillars = sdBox(p_repeatedPillars, vec3.fromValues(pillarHalfSide, pillarHalfHeight, pillarHalfSide));
 
     const storyHeight = 0.895;
-    const windowBarHeight = 0.23;
+    const windowLedgeHeight = 0.23;
     const windows = sdBox(
         opShift(p, vec3.fromValues(-1.0 * pillarHalfSide, pillarHalfHeight, 0.0)),
-        vec3.fromValues(pillarHalfSide, pillarHalfHeight, 0.5 * 4.0 * pillarSpacing)
-    );
-    const p_repeatedWindowBars = opRepeatFinite(
-        opShift(p, vec3.fromValues(-0.25 * pillarHalfSide, pillarHalfHeight, 0.0)),
-        vec3.fromValues(1.0, storyHeight, 1.0),
-        vec3.fromValues(0.0, -21.0, 0.0),
-        vec3.fromValues(0.0, 21.0, 0.0)
-    );
-    const windowBars = sdBox(
-        p_repeatedWindowBars,
-        vec3.fromValues(pillarHalfSide, 0.5 * windowBarHeight, 0.5 * 4.0 * pillarSpacing)
+        vec3.fromValues(pillarHalfSide, pillarHalfHeight - storyHeight, 0.5 * 4.0 * pillarSpacing)
     );
 
-    return Math.min(pillars, windows, windowBars);
+    const halfStoryCount = 21.0;
+    const p_repeatedWindowLedges = opRepeatFinite(
+        opShift(p, vec3.fromValues(-0.25 * pillarHalfSide, pillarHalfHeight, 0.0)),
+        vec3.fromValues(1.0, storyHeight, 1.0),
+        vec3.fromValues(0.0, -halfStoryCount, 0.0),
+        vec3.fromValues(0.0, halfStoryCount, 0.0)
+    );
+    const windowLedges = sdBox(
+        p_repeatedWindowLedges,
+        vec3.fromValues(pillarHalfSide, 0.5 * windowLedgeHeight, 0.5 * 4.0 * pillarSpacing)
+    );
+
+    const smallLedgeHeight = 0.6 * windowLedgeHeight;
+    const smallLedgeWidth = 3.44;
+    const p_repeatedSmallLedges = opRepeatFinite(
+        opShift(p, vec3.fromValues(-0.25 * pillarHalfSide, pillarHalfHeight - (windowLedgeHeight - smallLedgeHeight), 2.0 * pillarSpacing + 0.5 * smallLedgeWidth)),
+        vec3.fromValues(1.0, storyHeight, 1.0),
+        vec3.fromValues(0.0, -halfStoryCount, 0.0),
+        vec3.fromValues(0.0, halfStoryCount + 1.0, 0.0)
+    );
+    const smallLedges = sdBox(
+        p_repeatedSmallLedges,
+        vec3.fromValues(pillarHalfSide, 0.5 * smallLedgeHeight, 0.5 * smallLedgeWidth)
+    );
+
+    const wallAngle = -38.0 * Math.PI / 180.0;
+    const p_wallShifted = opShift(p, vec3.fromValues(0.0, pillarHalfHeight, 2.0 * pillarSpacing + smallLedgeWidth));
+    const p_wallRotated = opRotateY(p_wallShifted, wallAngle);
+    const balconyWall = Math.max(
+        sdBox(p_wallRotated, vec3.fromValues(2.5, pillarHalfHeight + storyHeight, 0.25)),
+        sdBox(p_wallShifted, vec3.fromValues(1.75, pillarHalfHeight + storyHeight, 2.0))
+    );
+
+    const balconyHalfLength = 0.5 * 1.95 * pillarSpacing;
+    const p_shiftBalconies = opShift(p, vec3.fromValues(0.5 * 1.75 - 0.15, pillarHalfHeight, 2.0 * pillarSpacing + smallLedgeWidth + balconyHalfLength + 1.15));
+    const p_repeatedBalconies = opRepeatFinite(
+        p_shiftBalconies,
+        vec3.fromValues(1.0, storyHeight, 1.0),
+        vec3.fromValues(0.0, -halfStoryCount, 0.0),
+        vec3.fromValues(0.0, halfStoryCount + 1.0, 0.0)
+    );
+    const balconies = Math.max(
+        sdCromwellBalcony(p_repeatedBalconies, windowLedgeHeight, balconyHalfLength),
+        sdBox(
+            opRotateY(opShift(p_repeatedBalconies, vec3.fromValues(0.0, 0.0, -1.25)), wallAngle),
+            vec3.fromValues(3.5, storyHeight, balconyHalfLength - 0.4)
+        )
+    );
+
+    const p_shiftSideBalconies = opShift(p, vec3.fromValues(0.0, pillarHalfHeight, -2.0 * pillarSpacing));
+    const p_repeatedSideBalconies = opRepeatFinite(
+        p_shiftSideBalconies,
+        vec3.fromValues(1.0, storyHeight, 1.0),
+        vec3.fromValues(0.0, -halfStoryCount, 0.0),
+        vec3.fromValues(0.0, halfStoryCount, 0.0)
+    );
+    const p_rotatedSideBalconies = opRotateY(p_repeatedSideBalconies, Math.PI * 0.5);
+    const sideBalconies = sdCromwellBalcony(p_rotatedSideBalconies, windowLedgeHeight, pillarHalfSide);
+
+    return Math.min(pillars, windows, windowLedges, smallLedges, balconyWall, balconies, sideBalconies);
 }
 
 function distanceToScene(p) {
@@ -332,7 +415,8 @@ function distanceToScene(p) {
         vec3.fromValues(1.0, 0.0, 0.0)
     );
     const sd_pillars = sdStackedPillar(p_repeated);
-    const p_shifted = opShift(p, vec3.fromValues(-16.0, 0.0, -16.5));
+    const shiftScale = 1.15;
+    const p_shifted = opShift(p, vec3.fromValues(-16.0 * shiftScale, 0.0, -16.5 * shiftScale));
     const sd_tower = sdCromwellTower(p_shifted);
     return Math.min(sd_pillars, sd_tower);
 }
@@ -398,12 +482,14 @@ const angleCamera = (90.0 - 43.0) / 180.0 * Math.PI;
 const cameraDir   = vec3.fromValues(-Math.sin(angleCamera), 0.0, -Math.cos(angleCamera));
 const camera      = vec3.scaleAndAdd(vec3.create(), vec3.fromValues(0.0, -3.5, 0.0), cameraDir,  -7.5);
 const lookAt      = vec3.fromValues(0.0, 2.0, 1.13);
-// const camera      = vec3.fromValues(-10.0, 20.0, -10.5);
-// const lookAt      = vec3.fromValues(-16.0, 20.0, -16.5);
+// const camera      = vec3.fromValues(-5.0, 40.0, -21.5);
+// const lookAt      = vec3.fromValues(-16.0, 10.0, -21.5);
+// const camera      = vec3.fromValues(1.0, 0.0, 5.0);
+// const lookAt      = vec3.fromValues(1.0, 0.0, 0.0);
 const up          = vec3.fromValues(0.0, 1.0, 0.0);
 let rayMarcher    = new RayMarcher(camera, lookAt, up, 1.5 * 38.0, canvasDim[0] / canvasDim[1]);
 
-let light = vec3.fromValues(5.0e5, 3.3e5, -5.0);
+let light = vec3.fromValues(5.0e2, 3.3e2, -5.0);
 
 onJitteredGrid(canvasDim, 4.0, rng, (x, y) => {
     const screenCoordinates = vec2.fromValues(
