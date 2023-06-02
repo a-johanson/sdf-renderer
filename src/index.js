@@ -150,7 +150,7 @@ function distanceToScene(p) {
 }
 
 
-// --- Drawing hatch lines by walking on the sdf = 0 iso-surface
+// --- Drawing hatch lines by walking on the SDF = 0 iso-surface
 
 function drawPolyLine(svg, points) {
     if (points.length > 1) {
@@ -159,17 +159,30 @@ function drawPolyLine(svg, points) {
     }
 }
 
-function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount, stepScale, rng) {
-    const canvasStart = rayMarcher.screenCoordinatesToCanvas(canvasDim, pScene.screenCoordinates)
+function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount, stepScale, hatchAngle, rng) {
+    const canvasStart = rayMarcher.screenCoordinatesToCanvas(canvasDim, pScene.screenCoordinates);
     let polyLinePoints = [[canvasStart[0], canvasStart[1]]];
+    const cosHatchAngle = Math.cos(hatchAngle);
+    const sinHatchAngle = Math.sin(hatchAngle);
     let pPrev = pScene;
     for (let i = 0; i < stepCount; i++) {
-        let toLight = vec3.sub(vec3.create(), light, pPrev.p);
-        const normalComponent = vec3.dot(pPrev.normal, toLight);
-        vec3.scaleAndAdd(toLight, toLight, pPrev.normal, -normalComponent);
+        // Construct an orthonormal basis (u, v) of the plane defined by pPrev.normal
+        let v = vec3.sub(vec3.create(), light, pPrev.p);
+        vec3.normalize(v, v);
+        const normalComponent = vec3.dot(pPrev.normal, v);
+        vec3.scaleAndAdd(v, v, pPrev.normal, -normalComponent);
+        const v_len = vec3.len(v);
+        if (v_len < 1.0e-8) {
+            console.log("v_len < 1.0e-8");
+            break;
+        }
+        vec3.scale(v, v, 1.0 / v_len);
+        let u = vec3.create();
+        vec3.normalize(u, vec3.cross(u, pPrev.normal, v));
 
         let surfaceDir = vec3.create();
-        vec3.normalize(surfaceDir, vec3.cross(surfaceDir, pPrev.normal, toLight));
+        vec3.scale(surfaceDir, u, cosHatchAngle);
+        vec3.scaleAndAdd(surfaceDir, surfaceDir, v, sinHatchAngle);
         const pWalk = new ScenePoint({
             rayMarcher: rayMarcher,
             sdf: sdf,
@@ -214,10 +227,6 @@ const angleCamera = (90.0 - 43.0) / 180.0 * Math.PI;
 const cameraDir   = vec3.fromValues(-Math.sin(angleCamera), 0.0, -Math.cos(angleCamera));
 const camera      = vec3.scaleAndAdd(vec3.create(), vec3.fromValues(0.0, -3.5, 0.0), cameraDir,  -7.5);
 const lookAt      = vec3.fromValues(0.0, 2.0, 1.13);
-// const camera      = vec3.fromValues(-5.0, 40.0, -21.5);
-// const lookAt      = vec3.fromValues(-16.0, 10.0, -21.5);
-// const camera      = vec3.fromValues(1.0, 0.0, 5.0);
-// const lookAt      = vec3.fromValues(1.0, 0.0, 0.0);
 const up          = vec3.fromValues(0.0, 1.0, 0.0);
 let rayMarcher    = new RayMarcher(camera, lookAt, up, 1.5 * 38.0, canvasDim[0] / canvasDim[1]);
 
@@ -233,7 +242,8 @@ onJitteredGrid(canvasDim, 4.0, rng, (x, y) => {
         const distanceScalingFactor = Math.min(Math.max(Math.pow(pScene.distFromCamera, 2.0) / 64.0, 0.8), 3.0);
         const walkingSteps = (5 + pScene.lightIntensity * 80) * distanceScalingFactor;
         const walkingDist = 0.01;
-        drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, walkingDist, rng);
-        drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, -walkingDist, rng);
+        const hatchAngle = (180.0 - 32.0) * Math.PI / 180.0;
+        drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, walkingDist, hatchAngle, rng);
+        drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, -walkingDist, hatchAngle, rng);
     }
 });
