@@ -247,3 +247,15 @@ onJitteredGrid(canvasDim, 4.0, rng, (x, y) => {
         drawHatchLine(draw, canvasDim, rayMarcher, distanceToScene, light, pScene, walkingSteps, -walkingDist, hatchAngle, rng);
     }
 });
+
+// --- Download the output SVG image to a file (as described in https://stackoverflow.com/a/38019175)
+
+var svgData = draw.svg();
+var svgBlob = new Blob([svgData], { type:"image/svg+xml;charset=utf-8" });
+var svgUrl = URL.createObjectURL(svgBlob);
+var downloadLink = document.createElement("a");
+downloadLink.href = svgUrl;
+downloadLink.download = "cromwell.svg";
+document.body.appendChild(downloadLink);
+downloadLink.click();
+document.body.removeChild(downloadLink);
