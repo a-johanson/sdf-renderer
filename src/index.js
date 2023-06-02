@@ -152,14 +152,28 @@ function distanceToScene(p) {
 
 // --- Drawing hatch lines by walking on the SDF = 0 iso-surface
 
-function drawPolyLine(svg, points) {
+function drawPolyLine(svg, points, color) {
     if (points.length > 1) {
         const roundedPoints = points.map(ps => ps.map(v => v.toFixed(2)));
-        svg.polyline(roundedPoints).fill('none').stroke({ width: 1, color: '#f06', linecap: 'round', linejoin: 'round' });
+        svg.polyline(roundedPoints).fill('none').stroke({ width: 1, color: color, linecap: 'round', linejoin: 'round' });
     }
 }
 
+function randomLineColor(rng) {
+    const palette = [
+        '#050d1a',
+        '#050d1a',
+        '#15273f',
+        '#15273f',
+        '#15273f',
+        '#456685',
+        '#b3c4d4'
+    ];
+    return palette[Math.floor(rng() * palette.length)];
+}
+
 function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount, stepScale, hatchAngle, rng) {
+    const color = randomLineColor(rng);
     const canvasStart = rayMarcher.screenCoordinatesToCanvas(canvasDim, pScene.screenCoordinates);
     let polyLinePoints = [[canvasStart[0], canvasStart[1]]];
     const cosHatchAngle = Math.cos(hatchAngle);
@@ -197,12 +211,12 @@ function drawHatchLine(svg, canvasDim, rayMarcher, sdf, light, pScene, stepCount
             polyLinePoints.push([canvasWalk[0], canvasWalk[1]]);
         }
         else {
-            drawPolyLine(svg, polyLinePoints);
+            drawPolyLine(svg, polyLinePoints, color);
             polyLinePoints = [];
         }
         pPrev = pWalk;
     }
-    drawPolyLine(svg, polyLinePoints);
+    drawPolyLine(svg, polyLinePoints, color);
 }
 
 function onJitteredGrid(canvasDim, cellSize, rng, f) {
