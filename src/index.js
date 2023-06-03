@@ -167,7 +167,8 @@ function randomLineColor(rng) {
         '#15273f',
         '#15273f',
         '#456685',
-        '#b3c4d4'
+        '#b3c4d4',
+        '#d11f25'
     ];
     return palette[Math.floor(rng() * palette.length)];
 }
